@@ -1,3 +1,6 @@
+<link rel="import" href="bower_components/paper-material/paper-material.html">
+<link rel="import" href="bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+
 <dom-module id="adebray-canvas">
 	<template>
 		<style>
@@ -6,80 +9,213 @@
 			}
 
 			#renderer {
+				display: block;
 				border: 1px solid black;
 			}
-		</style>
 
-		<canvas id=renderer1 width=800 height=600></canvas>
-		<canvas id=renderer2 width=800 height=600></canvas>
+			:host ::content paper-material {
+				margin: 4px;
+				padding: 8px;
+			}
+
+			:host ::content .it {
+				width: 300px;
+			}
+		</style>
+		<style is="custom-style" include="iron-flex iron-flex-alignment"></style>
+
+		<div>
+			<canvas id=renderer width=800 height=600></canvas>
+			<div class="layout horizontal">
+				<div class="layout vertical">
+				<paper-material><b>Scene.children</b></paper-material>
+				<template is="dom-repeat" items="{{stats}}">
+					<paper-material class="it">{{item.name}}: {{item.amount}}</paper-material>
+				</template>
+				</div>
+				<div class="layout vertical">
+				<paper-material><b>updateStack</b></paper-material>
+				<template is="dom-repeat" items="{{updateStack}}">
+					<paper-material>{{stringify(item)}}</paper-material>
+				</template>
+				</div>
+			</div>
+		</div>
 	</template>
 	<script>
 		Polymer({
 			is: 'adebray-canvas',
 
-			ready: function () {
-				var room = {
-					width : 20,
-					height : 10,
-					depth : 20
-				}
+			properties: {
+				time: {
+					type: Number,
+					value: 0
+				},
+				updateStack: {
+					type: Array,
+					value: []
+				},
+				stats: Array
+			},
 
-				var renderer1 = new THREE.WebGLRenderer({canvas: this.$.renderer1})
-				renderer1.gammaInput = true
-				renderer1.gammaOutput = true
+			stringify: function (o) { return o.toString() },
 
-				var renderer2 = new THREE.WebGLRenderer({canvas: this.$.renderer2})
-				renderer2.gammaInput = true
-				renderer2.gammaOutput = true
+			render: function () {
+				this.updateStack.forEach( (e) => {
+					e(this.time)
+				} )
+				this.time += 1
+			},
 
-				var camera1 = new THREE.PerspectiveCamera( 75, 800/600, 0.1, 1000 )
-			    camera1.position.set(-40, 5, 0)
+			init: function () {
+				var renderer = new THREE.WebGLRenderer({canvas: this.$.renderer})
+				renderer.gammaInput = true
+				renderer.gammaOutput = true
 
-			    var camera2 = new THREE.PerspectiveCamera( 75, 800/600, 0.1, 1000 )
-			    camera2.position.set(0, 1, 0)
+				renderer.shadowMap.enabled = true
+				renderer.shadowMap.type = THREE.PCFSoftShadowMap
+
+			    var camera = new THREE.PerspectiveCamera( 75, 800/600, 0.1, 1000 )
+				    camera.position.set(-10, 22, -16)
+				    camera.lookAt(new THREE.Vector3(0, 5, 0) )
+
+				var controls = new THREE.OrbitControls( camera, renderer.domElement )
 
 				var scene = new THREE.Scene()
 
-				var spotLight = new THREE.SpotLight( 0xffffff, 1 );
-				scene.add(spotLight)
+				var stats = new Stats();
+				stats.showPanel( 0 ); // 0: fps, 1: ms, 2: mb, 3+: custom
+				document.body.appendChild( stats.dom );
 
-				// var lightHelper = new THREE.SpotLightHelper( spotLight );
-				// scene.add(lightHelper)
+				this.push('updateStack', () => stats.begin() )
+				this.push('updateStack', () => renderer.render(scene, camera) )
+				this.push('updateStack', () => stats.end() )
+				this.push('updateStack', () => requestAnimationFrame( this.render.bind(this) ))
 
-				var ambient = new THREE.AmbientLight( 0xffffff, 0.1 );
+				return [scene, camera]
+			},
+
+			addSpotLight: function (scene) {
+				var spotLight = new THREE.SpotLight( 0xffffff, 1 )
+					spotLight.angle = 0.2
+					spotLight.position.set(0, 9, 0)
+					spotLight.castShadow = true
+					spotLight.shadow.mapSize.width = 1024
+					spotLight.shadow.mapSize.height = 1024
+					spotLight.shadow.camera.near = 1
+					spotLight.shadow.camera.far = 200
+					scene.add(spotLight)
+
+				this.splice('updateStack', 1, 0, (time) => {
+					spotLight.position.set(
+						Math.cos(time / 200) * 40,
+						10,
+						Math.sin(time / 200) * 40
+					)
+				})
+
+				return spotLight
+			},
+
+			addCube: function (scene, cube) {
+				var {color, x, y, z, w, h, d} = cube
+
+				var cubeMaterial = new THREE.MeshPhongMaterial({color: color})
+				var cubeGeometry = new THREE.BoxGeometry(w, h, d)
+				var refCube = new THREE.Mesh( cubeGeometry, cubeMaterial )
+					refCube.castShadow = true;
+					refCube.receiveShadow = true;
+					refCube.position.set( x, y, z );
+					scene.add(refCube)
+			},
+
+			addRoom: function (scene, room, fn) {
+				var {x, y, z} = room
+				var {w, h, d} = room
+
+				this.addCube(scene, {
+					color: 0xc0c0c0,
+
+					x: 0, y: 0, z: 0,
+					w: w, h: 1, d: d
+				})
+
+				this.addCube(scene, {
+					color: 0xffc0c0,
+
+					x: 0, y: 1, z: 0,
+					w: 1, h: 1, d: 1
+				})
+
+				if (fn) {
+					for (var _x = x; _x <= w + x - 1; _x += room.density)
+					for (var _y = y + room.density; _y <= h; _y += room.density)
+					for (var _z = z; _z <= d + z - 1; _z += room.density)
+						fn(room, _x, _y, _z)
+				}
+			},
+
+			ready: function () {
+				var[scene, camera] = this.init()
+				var spotLight = this.addSpotLight(scene)
+
+				var ambient = new THREE.AmbientLight( 0xffffff, 0.3 );
 				scene.add(ambient)
 
-				var matFloor = new THREE.MeshPhongMaterial({color: 0xff0000})
-				var geoFloor = new THREE.BoxGeometry( 20, 1, 20 )
-				var mshFloor = new THREE.Mesh( geoFloor, matFloor )
+				this.addRoom(scene, {
+					density: 1,
 
-				mshFloor.receiveShadow = true;
-				mshFloor.position.set( 0, 0, 0 );
-				scene.add(mshFloor)
+					x: -10,
+					y: 0,
+					z: -10,
 
-				var mshFloor = new THREE.Mesh( geoFloor, matFloor )
-				mshFloor.position.set( 0, 10, 0 );
-				scene.add(mshFloor)
+					w: 21,
+					h: 10,
+					d: 21
+				}, (room, x, y, z) => {
+					if ((x > 0 && x < 4) && (y > 2 && y < 8))
+						return
 
-				camera1.lookAt(mshFloor.position)
+					if ((x == room.x || x == room.w + room.x - 1))
+						this.addCube(scene, {
+							color: 0xffc0c0,
 
-				var time = 0
-				var render = function () {
-					requestAnimationFrame( render )
+							x: x, y: y, z: z,
+							w: 1, h: 1, d: 1
+						})
+					if (z == room.z || z == room.d + room.z - 1)
+						this.addCube(scene, {
+							color: 0xc0ffc0,
 
-					camera2.lookAt(new THREE.Vector3(0, 0, 0))
-					camera2.position.x = Math.cos(time) * 10
-					camera2.position.z = Math.sin(time) * 10
-					// camera2.position.z = -Math.cos(time)
-					renderer1.render(scene, camera1)
-					renderer2.render(scene, camera2)
+							x: x, y: y, z: z,
+							w: 1, h: 1, d: 1
+						})
+				})
 
-					time += 0.005
+				var gui = new dat.GUI();
+				gui.add(spotLight, 'power').min(0).max(3 * Math.PI)
+				gui.add(spotLight, 'distance').min(0).max(100).step(1)
+				gui.add(spotLight, 'angle').min(0).max(Math.PI / 2)
+				gui.add(spotLight, 'penumbra').min(0).max(1).step(0.01)
+				gui.add(spotLight, 'decay', [1, 2])
+				gui.add(spotLight, 'castShadow')
+
+				let toArray = (o) => {
+					var o = o.reduce( (p, e) => {
+						p[e.constructor.name] = p[e.constructor.name] + 1 || 1
+						return p
+					}, {})
+
+					return Object.keys( o ).map((k) => {
+						return {
+							name: k,
+							amount: o[k]
+						}
+					})
 				}
 
-				render()
-
-
+				this.set('stats', toArray(scene.children))
+				this.render()
 			}
 		});
 	</script>
