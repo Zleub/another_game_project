@@ -1,35 +1,34 @@
 console.log('Written with node v7.0.0, current: ' + process.version)
 
-let adebray = {}
+const http = require('http')
 
-let def = function (path, object) {
-	let o = global
+const director = require('./ext/director')
+const redis = require('./ext/node_redis')
+const adebray = require('./adebray.js')
 
-	path.match(/(\w+)/g).forEach( (v, i, array) => {
-		if (o[v] == undefined && i < array.length - 1) {
-			console.log(v, i, array.length)
-			o[v] = {}
-		}
-		o = o[v]
-	} )
-
-	console.log(o)
-	o = object || {}
+function HelloWorld() {
+	this.res.end('World Hello')
 }
 
-// let fn = function ({name, fn}) {
-// 	def( adebray[name], [] ) = fn
-// 	adebray.documentation[name] = arguments[0]
-// }
+var router = new director.http.Router({
+	'/hello': {
+		get: HelloWorld
+	}
+})
 
-// fn({
-// 	name: "fn",
-// 	description: "The 1st order function for documentation",
-// 	tags: [ "utils" ],
-// 	fn: fn
-// })
+const client = redis.createClient({
+	port: 6380
+})
+client.on("error", function (err) {
+    console.log("Error " + err);
+})
 
-def('adebray.documentation.io')
+var server = http.createServer( (req, res) => {
+	router.dispatch(req, res, (err) => res.end('404') )
+} )
 
-console.log(global.adebray)
+client.keys('*', function (err, res) {
+	console.log(err, res)
+})
 
+server.listen('4200', 'localhost')
