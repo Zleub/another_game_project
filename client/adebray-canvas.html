@@ -1,0 +1,86 @@
+<dom-module id="adebray-canvas">
+	<template>
+		<style>
+			:host {
+				display: block;
+			}
+
+			#renderer {
+				border: 1px solid black;
+			}
+		</style>
+
+		<canvas id=renderer1 width=800 height=600></canvas>
+		<canvas id=renderer2 width=800 height=600></canvas>
+	</template>
+	<script>
+		Polymer({
+			is: 'adebray-canvas',
+
+			ready: function () {
+				var room = {
+					width : 20,
+					height : 10,
+					depth : 20
+				}
+
+				var renderer1 = new THREE.WebGLRenderer({canvas: this.$.renderer1})
+				renderer1.gammaInput = true
+				renderer1.gammaOutput = true
+
+				var renderer2 = new THREE.WebGLRenderer({canvas: this.$.renderer2})
+				renderer2.gammaInput = true
+				renderer2.gammaOutput = true
+
+				var camera1 = new THREE.PerspectiveCamera( 75, 800/600, 0.1, 1000 )
+			    camera1.position.set(-40, 5, 0)
+
+			    var camera2 = new THREE.PerspectiveCamera( 75, 800/600, 0.1, 1000 )
+			    camera2.position.set(0, 1, 0)
+
+				var scene = new THREE.Scene()
+
+				var spotLight = new THREE.SpotLight( 0xffffff, 1 );
+				scene.add(spotLight)
+
+				// var lightHelper = new THREE.SpotLightHelper( spotLight );
+				// scene.add(lightHelper)
+
+				var ambient = new THREE.AmbientLight( 0xffffff, 0.1 );
+				scene.add(ambient)
+
+				var matFloor = new THREE.MeshPhongMaterial({color: 0xff0000})
+				var geoFloor = new THREE.BoxGeometry( 20, 1, 20 )
+				var mshFloor = new THREE.Mesh( geoFloor, matFloor )
+
+				mshFloor.receiveShadow = true;
+				mshFloor.position.set( 0, 0, 0 );
+				scene.add(mshFloor)
+
+				var mshFloor = new THREE.Mesh( geoFloor, matFloor )
+				mshFloor.position.set( 0, 10, 0 );
+				scene.add(mshFloor)
+
+				camera1.lookAt(mshFloor.position)
+
+				var time = 0
+				var render = function () {
+					requestAnimationFrame( render )
+
+					camera2.lookAt(new THREE.Vector3(0, 0, 0))
+					camera2.position.x = Math.cos(time) * 10
+					camera2.position.z = Math.sin(time) * 10
+					// camera2.position.z = -Math.cos(time)
+					renderer1.render(scene, camera1)
+					renderer2.render(scene, camera2)
+
+					time += 0.005
+				}
+
+				render()
+
+
+			}
+		});
+	</script>
+</dom-module>
